@@ -1,0 +1,29 @@
+{
+  "name": "maintroll",
+  "version": "1.0.0",
+  "description": "An AI enabled maintenance tracker",
+  "homepage": "https://github.com/ansarulSohan/MainTroll#readme",
+  "bugs": {
+    "url": "https://github.com/ansarulSohan/MainTroll/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ansarulSohan/MainTroll.git"
+  },
+  "license": "ISC",
+  "author": "",
+  "type": "module",
+  "main": "app.js",
+  "scripts": {
+    "test": "node --test",
+    "start": "node app.js",
+    "dev": "node --watch app.js"
+  },
+  "dependencies": {
+    "@aws-sdk/client-dynamodb": "^3.1155.0",
+    "@aws-sdk/lib-dynamodb": "^3.1155.0",
+    "dotenv": "^18.0.9",
+    "express": "^5.3.0",
+    "nodemon": "^3.1.14"
+  }
+}
