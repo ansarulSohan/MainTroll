@@ -1,0 +1,74 @@
+import os
+import uuid
+import pymysql
+
+TASK_SCORE = {"Critical": 40, "High": 30, "Medium": 20, "Low": 10}
+EQUIP_SCORE = {"Critical": 50, "Warning": 30, "Normal": 10}
+
+
+def get_connection():
+    return pymysql.connect(
+        host=os.environ["DB_HOST"],
+        user=os.environ["DB_USER"],
+        password=os.environ["DB_PASSWORD"],
+        database=os.environ["DB_NAME"],
+        connect_timeout=5,
+    )
+
+
+def create_alert(cur, task_id, document_id, alert_type, score):
+    cur.execute(
+        """INSERT INTO alerts
+           (alert_id, task_id, document_id, alert_type, priority_score, state, sent_at)
+           VALUES (%s, %s, %s, %s, %s, 'Open', NULL)""",
+        (str(uuid.uuid4()), task_id, document_id, alert_type, score),
+    )
+
+
+def lambda_handler(event, context):
+    conn = get_connection()
+    created = 0
+    try:
+        with conn.cursor() as cur:
+            # 1. Overdue tasks that have no active alert yet
+            cur.execute("""
+                SELECT t.task_id, t.priority, e.criticality
+                FROM maintenance_tasks t
+                JOIN equipment e ON e.equipment_id = t.equipment_id
+                WHERE t.status IN ('Pending', 'In Progress')
+                  AND t.due_date < CURDATE()
+                  AND NOT EXISTS (
+                      SELECT 1 FROM alerts a
+                      WHERE a.task_id = t.task_id
+                        AND a.alert_type = 'Overdue maintenance'
+                        AND a.state IN ('Open', 'Sent', 'Acknowledged'))
+            """)
+            for task_id, priority, criticality in cur.fetchall():
+                score = TASK_SCORE.get(priority, 10) + EQUIP_SCORE.get(criticality, 10)
+                create_alert(cur, task_id, None, "Overdue maintenance", score)
+                created += 1
+
+            # 2. Documents expired or expiring within 30 days, no active alert yet
+            cur.execute("""
+                SELECT d.document_id, d.expiry_date < CURDATE() AS is_expired, e.criticality
+                FROM documents d
+                JOIN equipment e ON e.equipment_id = d.equipment_id
+                WHERE d.status = 'Active'
+                  AND d.expiry_date IS NOT NULL
+                  AND d.expiry_date <= DATE_ADD(CURDATE(), INTERVAL 30 DAY)
+                  AND NOT EXISTS (
+                      SELECT 1 FROM alerts a
+                      WHERE a.document_id = d.document_id
+                        AND a.state IN ('Open', 'Sent', 'Acknowledged'))
+            """)
+            for document_id, is_expired, criticality in cur.fetchall():
+                alert_type = "Document expired" if is_expired else "Document expiring"
+                score = (40 if is_expired else 20) + EQUIP_SCORE.get(criticality, 10)
+                create_alert(cur, None, document_id, alert_type, score)
+                created += 1
+
+        conn.commit()
+    finally:
+        conn.close()
+
+    return {"alerts_created": created}
