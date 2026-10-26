@@ -1,0 +1,58 @@
+import os
+import json
+import pymysql
+from pymysql.cursors import DictCursor
+
+
+def get_connection():
+    return pymysql.connect(
+        host=os.environ["DB_HOST"],
+        user=os.environ["DB_USER"],
+        password=os.environ["DB_PASSWORD"],
+        database=os.environ["DB_NAME"],
+        connect_timeout=5,
+        cursorclass=DictCursor,
+    )
+
+
+def lambda_handler(event, context):
+    conn = get_connection()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("SELECT name, location, criticality, status FROM equipment ORDER BY name")
+            equipment = cur.fetchall()
+
+            cur.execute("""
+                SELECT t.title, e.name AS equipment, t.due_date, t.status, t.priority,
+                       COALESCE(u.name, 'Not assigned') AS assigned_to
+                FROM maintenance_tasks t
+                JOIN equipment e ON e.equipment_id = t.equipment_id
+                LEFT JOIN musers u ON u.user_id = t.assigned_to""")
+            tasks = cur.fetchall()
+
+            cur.execute("""
+                SELECT d.doc_type, e.name AS equipment, d.expiry_date, d.status
+                FROM documents d
+                JOIN equipment e ON e.equipment_id = d.equipment_id""")
+            documents = cur.fetchall()
+
+            cur.execute("""
+                SELECT a.alert_type, a.priority_score, a.state,
+                       CASE WHEN a.task_id IS NOT NULL
+                            THEN CONCAT(t.title, ' (', te.name, ')')
+                            ELSE CONCAT(d.doc_type, ' (', de.name, ')') END AS item
+                FROM alerts a
+                LEFT JOIN maintenance_tasks t ON t.task_id = a.task_id
+                LEFT JOIN equipment te ON te.equipment_id = t.equipment_id
+                LEFT JOIN documents d ON d.document_id = a.document_id
+                LEFT JOIN equipment de ON de.equipment_id = d.equipment_id""")
+            alerts = cur.fetchall()
+    finally:
+        conn.close()
+
+    body = {"equipment": equipment, "tasks": tasks, "documents": documents, "alerts": alerts}
+    return {
+        "statusCode": 200,
+        "headers": {"Content-Type": "application/json"},
+        "body": json.dumps(body, default=str),
+    }
