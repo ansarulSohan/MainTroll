@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MainTroll dashboard</title>
+<style>
+:root{color-scheme:light dark;--bg:#e9eef2;--panel:#f8fafb;--ink:#10243a;--mut:#5a6d80;--line:#cfd9e1;--crit:#c2410c;--warn:#a16207;--ok:#2f7d57;--acc:#0e4f8b;--bar:#d7e0e8}
+@media (prefers-color-scheme:dark){:root{--bg:#0d1824;--panel:#142334;--ink:#e6eef6;--mut:#8fa3b7;--line:#25384d;--crit:#ff8a57;--warn:#f2c14e;--ok:#5fcf9a;--acc:#6bb4f5;--bar:#1f3247}}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--bg);color:var(--ink);font:15px/1.5 "Segoe UI",system-ui,sans-serif}
+h1,h2,.fig b{font-family:Georgia,"Iowan Old Style",serif;font-weight:700}
+header{padding:28px 24px 8px;max-width:1180px;margin:auto;display:flex;flex-wrap:wrap;gap:8px 24px;align-items:baseline;justify-content:space-between}
+h1{font-size:30px;margin:0;letter-spacing:-.3px}
+header p{margin:0;color:var(--mut)}
+main{max-width:1180px;margin:auto;padding:8px 24px 40px}
+.strip{display:grid;grid-template-columns:repeat(4,1fr);border-block:2px solid var(--ink);margin:16px 0 28px}
+.fig{padding:16px 18px;border-left:1px solid var(--line)}
+.fig:first-child{border-left:0;padding-left:0}
+.fig b{display:block;font-size:44px;line-height:1.05}
+.fig span{color:var(--mut)}
+.fig.hot b{color:var(--crit)}
+.grid{display:grid;grid-template-columns:3fr 2fr;gap:28px}
+section{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:18px 20px;min-width:0}
+section.wide{grid-column:1/-1}
+h2{font-size:20px;margin:0 0 4px}
+.sub{color:var(--mut);margin:0 0 12px}
+.bar{display:flex;gap:12px;align-items:center;justify-content:space-between;flex-wrap:wrap;margin-bottom:6px}
+select{font:inherit;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:4px;padding:5px 8px}
+select:focus-visible{outline:2px solid var(--acc);outline-offset:2px}
+.scroll{overflow-x:auto}
+table{width:100%;border-collapse:collapse;min-width:480px}
+th{text-align:left;font-weight:600;color:var(--mut);padding:8px 8px 8px 0;border-bottom:1px solid var(--line);font-size:13px}
+td{padding:10px 8px 10px 0;border-bottom:1px solid var(--line);vertical-align:middle}
+tr:last-child td{border-bottom:0}
+.gauge{display:flex;align-items:center;gap:8px;min-width:110px}
+.gauge i{display:block;height:8px;border-radius:4px;background:var(--bar);flex:1;overflow:hidden}
+.gauge i s{display:block;height:100%;background:var(--acc)}
+.gauge.c i s{background:var(--crit)}.gauge.w i s{background:var(--warn)}
+.tag{display:inline-block;padding:1px 9px;border-radius:10px;border:1px solid currentColor;font-size:13px;white-space:nowrap}
+.t-crit{color:var(--crit)}.t-warn{color:var(--warn)}.t-ok{color:var(--ok)}.t-mut{color:var(--mut)}
+.empty{color:var(--mut);padding:14px 0}
+#msg{color:var(--mut);padding:8px 0}
+@media (max-width:820px){.strip{grid-template-columns:1fr 1fr}.fig:nth-child(3){border-left:0;padding-left:0}.grid{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<header>
+  <h1>MainTroll</h1>
+  <p>Offshore maintenance monitoring &middot; <span id="stamp"></span></p>
+</header>
+<main>
+  <div id="msg" role="status"></div>
+  <div class="strip" id="kpis"></div>
+  <div class="grid">
+    <section>
+      <div class="bar">
+        <div><h2>Alerts to act on</h2><p class="sub">Highest priority first</p></div>
+        <label>Show <select id="state"><option value="">All states</option><option>Open</option><option>Sent</option><option>Acknowledged</option><option>Resolved</option><option>Failed</option></select></label>
+      </div>
+      <div class="scroll"><table id="alerts"></table></div>
+    </section>
+    <section>
+      <h2>Documents</h2><p class="sub">Expired or expiring within 30 days</p>
+      <div class="scroll"><table id="docs"></table></div>
+    </section>
+    <section class="wide">
+      <h2>Maintenance tasks</h2><p class="sub">Not yet completed, earliest due date first</p>
+      <div class="scroll"><table id="tasks"></table></div>
+    </section>
+    <section class="wide">
+      <h2>Equipment</h2><p class="sub">Current status and criticality</p>
+      <div class="scroll"><table id="equip"></table></div>
+    </section>
+  </div>
+</main>
+<script>
+// Paste your API Gateway URL here (no slash at the end, no /dashboard),
+// for example "https://abc123.execute-api.eu-north-1.amazonaws.com".
+// The API must answer GET /dashboard with JSON containing equipment, tasks, documents and alerts.
+const API_URL = "https://u6yw7twxil.execute-api.eu-north-1.amazonaws.com";
+
+const day = n => { const d = new Date(); d.setDate(d.getDate() + n); return d.toISOString().slice(0, 10); };
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const $ = id => document.getElementById(id);
+const today = day(0), soon = day(30);
+const tone = v => ({Critical:"t-crit",High:"t-crit",Warning:"t-warn",Medium:"t-warn","Under Maintenance":"t-warn",Open:"t-crit","Out of Service":"t-crit",Failed:"t-crit",Operational:"t-ok",Resolved:"t-ok",Acknowledged:"t-ok",Sent:"t-mut"}[v] || "t-mut");
+const tag = v => `<span class="tag ${tone(v)}">${esc(v)}</span>`;
+const fmt = d => d ? new Date(d + "T00:00:00").toLocaleDateString("en-GB", {day:"numeric", month:"short", year:"numeric"}) : "No expiry";
+const grid = (head, rows, empty) => rows.length
+  ? `<thead><tr>${head.map(h => `<th>${h}</th>`).join("")}</tr></thead><tbody>${rows.map(r => `<tr>${r.map(c => `<td>${c}</td>`).join("")}</tr>`).join("")}</tbody>`
+  : `<tbody><tr><td class="empty">${empty}</td></tr></tbody>`;
+const gauge = n => `<div class="gauge ${n >= 80 ? "c" : n >= 50 ? "w" : ""}"><i><s style="width:${Math.min(n,100)}%"></s></i><span>${n}</span></div>`;
+
+function render(data) {
+  const open = data.tasks.filter(t => t.status === "Pending" || t.status === "In Progress");
+  const overdue = open.filter(t => t.due_date < today);
+  const docs = data.documents.filter(d => d.status === "Active" && d.expiry_date && d.expiry_date <= soon);
+  const openAlerts = data.alerts.filter(a => a.state === "Open");
+  const down = data.equipment.filter(e => e.status === "Out of Service");
+  $("kpis").innerHTML = [
+    [openAlerts.length, "Open alerts", openAlerts.length > 0],
+    [overdue.length, "Overdue tasks", overdue.length > 0],
+    [docs.length, "Documents to renew", docs.length > 0],
+    [down.length, "Equipment out of service", down.length > 0]
+  ].map(k => `<div class="fig ${k[2] ? "hot" : ""}"><b>${k[0]}</b><span>${k[1]}</span></div>`).join("");
+
+  const wanted = $("state").value;
+  const alerts = data.alerts.filter(a => !wanted || a.state === wanted).sort((a, b) => b.priority_score - a.priority_score);
+  $("alerts").innerHTML = grid(["Priority", "Alert", "Item", "State"],
+    alerts.map(a => [gauge(a.priority_score), esc(a.alert_type), esc(a.item), tag(a.state)]),
+    "No alerts in this state.");
+  $("docs").innerHTML = grid(["Document", "Equipment", "Expires"],
+    docs.sort((a, b) => a.expiry_date.localeCompare(b.expiry_date)).map(d =>
+      [esc(d.doc_type), esc(d.equipment), `<span class="${d.expiry_date < today ? "t-crit" : "t-warn"}">${fmt(d.expiry_date)}${d.expiry_date < today ? " (expired)" : ""}</span>`]),
+    "Nothing to renew right now.");
+  $("tasks").innerHTML = grid(["Task", "Equipment", "Due", "Priority", "Status", "Assigned to"],
+    open.sort((a, b) => a.due_date.localeCompare(b.due_date)).map(t =>
+      [esc(t.title), esc(t.equipment), `<span class="${t.due_date < today ? "t-crit" : ""}">${fmt(t.due_date)}${t.due_date < today ? " (overdue)" : ""}</span>`, tag(t.priority), esc(t.status), esc(t.assigned_to)]),
+    "All maintenance tasks are done.");
+  $("equip").innerHTML = grid(["Equipment", "Location", "Criticality", "Status"],
+    data.equipment.map(e => [esc(e.name), esc(e.location), tag(e.criticality), tag(e.status)]),
+    "No equipment registered yet.");
+}
+
+let data = {equipment: [], tasks: [], documents: [], alerts: []};
+async function load() {
+  if (!API_URL) {
+    $("msg").textContent = "API_URL is empty. Paste your API Gateway URL near the top of this file.";
+    render(data);
+    return;
+  }
+  try {
+    const r = await fetch(API_URL.replace(/\/$/, "") + "/dashboard", {cache: "no-store"});
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    data = await r.json();
+    $("msg").textContent = "";
+    $("stamp").textContent = "updated " + new Date().toLocaleTimeString("en-GB", {hour: "2-digit", minute: "2-digit"});
+  } catch (e) {
+    $("msg").textContent = "Could not load live data (" + e.message + "). Showing the last data received. Check the API URL, CORS and the Lambda.";
+  }
+  render(data);
+}
+$("state").addEventListener("change", () => render(data));
+load();
+setInterval(load, 60000);
+</script>
+</body>
+</html>
