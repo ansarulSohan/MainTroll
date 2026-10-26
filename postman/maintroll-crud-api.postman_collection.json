@@ -2,26 +2,15 @@
   "info": {
     "name": "MainTroll CRUD API",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
-    "description": "CRUD API for the MainTroll maintenance database (AWS Lambda `maintroll-crud` + API Gateway HTTP API + RDS MySQL).\n\n## Endpoints\nEvery resource (`users`, `equipment`, `tasks`, `documents`, `alerts`) supports:\n\n| Method | Path | Description |\n|---|---|---|\n| GET | `/{resource}` | List rows (`limit`, `offset`, column filters) |\n| GET | `/{resource}/{id}` | Get one row |\n| POST | `/{resource}` | Create a row |\n| PUT / PATCH | `/{resource}/{id}` | Update the fields sent |\n| DELETE | `/{resource}/{id}` | Delete a row |\n\n## Errors\n- `400` invalid value (bad enum, date, limit) or no updatable fields\n- `404` unknown resource or id\n- `409` duplicate key, missing required field, or foreign-key violation\n\n## Setup\nSet the `baseUrl` collection variable (includes the stage, e.g. `.../default`). If a Cognito authorizer is attached, paste an ID token into `token`.\n\nRun the folders in order (Users \u2192 Equipment \u2192 Tasks \u2192 Documents \u2192 Alerts): each Create saves its id, which later Creates use as foreign keys."
+    "description": "CRUD API for the MainTroll maintenance database (AWS Lambda `maintroll-crud` + API Gateway HTTP API + RDS MySQL).\n\n## Endpoints\nEvery resource (`users`, `equipment`, `tasks`, `documents`, `alerts`) supports:\n\n| Method | Path | Description |\n|---|---|---|\n| GET | `/{resource}` | List rows (`limit`, `offset`, column filters) |\n| GET | `/{resource}/{id}` | Get one row |\n| POST | `/{resource}` | Create a row |\n| PUT / PATCH | `/{resource}/{id}` | Update the fields sent |\n| DELETE | `/{resource}/{id}` | Delete a row |\n\n## Errors\n- `400` invalid value (bad enum, date, limit) or no updatable fields\n- `404` unknown resource or id\n- `409` duplicate key, missing required field, or foreign-key violation\n\n## Setup\nSet the `baseUrl` collection variable (includes the stage, e.g. `.../default`).\n\nRun the folders in order (Users \u2192 Equipment \u2192 Tasks \u2192 Documents \u2192 Alerts): each Create saves its id, which later Creates use as foreign keys."
   },
   "auth": {
-    "type": "bearer",
-    "bearer": [
-      {
-        "key": "token",
-        "value": "{{token}}",
-        "type": "string"
-      }
-    ]
+    "type": "noauth"
   },
   "variable": [
     {
       "key": "baseUrl",
       "value": "https://wp2a5tdcz5.execute-api.eu-north-1.amazonaws.com/default"
-    },
-    {
-      "key": "token",
-      "value": ""
     },
     {
       "key": "user_id",
