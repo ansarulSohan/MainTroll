@@ -1,0 +1,788 @@
+{
+  "info": {
+    "name": "MainTroll CRUD API",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "description": "CRUD API for the MainTroll maintenance database (AWS Lambda `maintroll-crud` + API Gateway HTTP API + RDS MySQL).\n\n## Endpoints\nEvery resource (`users`, `equipment`, `tasks`, `documents`, `alerts`) supports:\n\n| Method | Path | Description |\n|---|---|---|\n| GET | `/{resource}` | List rows (`limit`, `offset`, column filters) |\n| GET | `/{resource}/{id}` | Get one row |\n| POST | `/{resource}` | Create a row |\n| PUT / PATCH | `/{resource}/{id}` | Update the fields sent |\n| DELETE | `/{resource}/{id}` | Delete a row |\n\n## Errors\n- `400` invalid value (bad enum, date, limit) or no updatable fields\n- `404` unknown resource or id\n- `409` duplicate key, missing required field, or foreign-key violation\n\n## Setup\nSet the `baseUrl` collection variable (includes the stage, e.g. `.../default`).\n\nRun the folders in order (Users \u2192 Equipment \u2192 Tasks \u2192 Documents \u2192 Alerts): each Create saves its id, which later Creates use as foreign keys."
+  },
+  "auth": {
+    "type": "noauth"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "https://wp2a5tdcz5.execute-api.eu-north-1.amazonaws.com/default"
+    },
+    {
+      "key": "user_id",
+      "value": ""
+    },
+    {
+      "key": "equipment_id",
+      "value": ""
+    },
+    {
+      "key": "task_id",
+      "value": ""
+    },
+    {
+      "key": "document_id",
+      "value": ""
+    },
+    {
+      "key": "alert_id",
+      "value": ""
+    }
+  ],
+  "item": [
+    {
+      "name": "Users (`musers`)",
+      "description": "`/users` - primary key `user_id`.\n\nFields: `name` (required), `email` (required, unique), `role` (required).",
+      "item": [
+        {
+          "name": "List users",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/users",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "users"
+              ],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "100",
+                  "disabled": true
+                },
+                {
+                  "key": "offset",
+                  "value": "0",
+                  "disabled": true
+                },
+                {
+                  "key": "role",
+                  "value": "Technician",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "Returns an array of rows. Optional `limit` (max 500), `offset`, and exact-match filters on any column (enable them in the Params tab)."
+          }
+        },
+        {
+          "name": "Create user",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('201 Created', () => pm.response.to.have.status(201));",
+                  "if (pm.response.code === 201) pm.collectionVariables.set('user_id', pm.response.json().user_id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Jane Doe\",\n  \"email\": \"jane.doe@example.com\",\n  \"role\": \"Technician\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/users",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "users"
+              ]
+            },
+            "description": "Creates a row and returns it (201). `user_id` is generated as a UUID unless you send one. The test script saves it into the `user_id` collection variable."
+          }
+        },
+        {
+          "name": "Get users by id",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/users/{{user_id}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "users",
+                "{{user_id}}"
+              ]
+            },
+            "description": "Returns one row, or 404."
+          }
+        },
+        {
+          "name": "Update users by id",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"role\": \"Supervisor\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/users/{{user_id}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "users",
+                "{{user_id}}"
+              ]
+            },
+            "description": "Partial update: only the fields you send are changed. PUT behaves the same. Returns the updated row."
+          }
+        },
+        {
+          "name": "Delete users by id",
+          "request": {
+            "method": "DELETE",
+            "url": {
+              "raw": "{{baseUrl}}/users/{{user_id}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "users",
+                "{{user_id}}"
+              ]
+            },
+            "description": "Returns 204 on success, 404 if not found. Deleting a row that other rows reference (e.g. equipment with tasks) returns 409."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Equipment",
+      "description": "`/equipment` - primary key `equipment_id`.\n\nFields: `name`, `location` (required), `criticality` (Critical | Warning | Normal), `status` (Operational | Under Maintenance | Out of Service | Retired).",
+      "item": [
+        {
+          "name": "List equipment",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/equipment",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "equipment"
+              ],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "100",
+                  "disabled": true
+                },
+                {
+                  "key": "offset",
+                  "value": "0",
+                  "disabled": true
+                },
+                {
+                  "key": "criticality",
+                  "value": "Critical",
+                  "disabled": true
+                },
+                {
+                  "key": "status",
+                  "value": "Operational",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "Returns an array of rows. Optional `limit` (max 500), `offset`, and exact-match filters on any column (enable them in the Params tab)."
+          }
+        },
+        {
+          "name": "Create equipment",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('201 Created', () => pm.response.to.have.status(201));",
+                  "if (pm.response.code === 201) pm.collectionVariables.set('equipment_id', pm.response.json().equipment_id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Gas Compressor A\",\n  \"location\": \"Platform North - Deck 2\",\n  \"criticality\": \"Critical\",\n  \"status\": \"Operational\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/equipment",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "equipment"
+              ]
+            },
+            "description": "Creates a row and returns it (201). `equipment_id` is generated as a UUID unless you send one. The test script saves it into the `equipment_id` collection variable."
+          }
+        },
+        {
+          "name": "Get equipment by id",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/equipment/{{equipment_id}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "equipment",
+                "{{equipment_id}}"
+              ]
+            },
+            "description": "Returns one row, or 404."
+          }
+        },
+        {
+          "name": "Update equipment by id",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"Under Maintenance\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/equipment/{{equipment_id}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "equipment",
+                "{{equipment_id}}"
+              ]
+            },
+            "description": "Partial update: only the fields you send are changed. PUT behaves the same. Returns the updated row."
+          }
+        },
+        {
+          "name": "Delete equipment by id",
+          "request": {
+            "method": "DELETE",
+            "url": {
+              "raw": "{{baseUrl}}/equipment/{{equipment_id}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "equipment",
+                "{{equipment_id}}"
+              ]
+            },
+            "description": "Returns 204 on success, 404 if not found. Deleting a row that other rows reference (e.g. equipment with tasks) returns 409."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Maintenance tasks (`maintenance_tasks`)",
+      "description": "`/tasks` - primary key `task_id`.\n\nFields: `equipment_id` (required, FK), `assigned_to` (user_id or null), `title` (required), `due_date` (YYYY-MM-DD), `status` (Pending | In Progress | Completed | Cancelled), `priority` (Critical | High | Medium | Low).",
+      "item": [
+        {
+          "name": "List tasks",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/tasks",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "tasks"
+              ],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "100",
+                  "disabled": true
+                },
+                {
+                  "key": "offset",
+                  "value": "0",
+                  "disabled": true
+                },
+                {
+                  "key": "status",
+                  "value": "Pending",
+                  "disabled": true
+                },
+                {
+                  "key": "priority",
+                  "value": "High",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "Returns an array of rows. Optional `limit` (max 500), `offset`, and exact-match filters on any column (enable them in the Params tab)."
+          }
+        },
+        {
+          "name": "Create task",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('201 Created', () => pm.response.to.have.status(201));",
+                  "if (pm.response.code === 201) pm.collectionVariables.set('task_id', pm.response.json().task_id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"equipment_id\": \"{{equipment_id}}\",\n  \"assigned_to\": \"{{user_id}}\",\n  \"title\": \"Replace compressor seals\",\n  \"due_date\": \"2026-11-15\",\n  \"status\": \"Pending\",\n  \"priority\": \"High\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/tasks",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "tasks"
+              ]
+            },
+            "description": "Creates a row and returns it (201). `task_id` is generated as a UUID unless you send one. The test script saves it into the `task_id` collection variable."
+          }
+        },
+        {
+          "name": "Get tasks by id",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/tasks/{{task_id}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "tasks",
+                "{{task_id}}"
+              ]
+            },
+            "description": "Returns one row, or 404."
+          }
+        },
+        {
+          "name": "Update tasks by id",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"In Progress\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/tasks/{{task_id}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "tasks",
+                "{{task_id}}"
+              ]
+            },
+            "description": "Partial update: only the fields you send are changed. PUT behaves the same. Returns the updated row."
+          }
+        },
+        {
+          "name": "Delete tasks by id",
+          "request": {
+            "method": "DELETE",
+            "url": {
+              "raw": "{{baseUrl}}/tasks/{{task_id}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "tasks",
+                "{{task_id}}"
+              ]
+            },
+            "description": "Returns 204 on success, 404 if not found. Deleting a row that other rows reference (e.g. equipment with tasks) returns 409."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Documents",
+      "description": "`/documents` - primary key `document_id`.\n\nFields: `equipment_id` (required, FK), `doc_type` (required), `expiry_date` (YYYY-MM-DD or null), `s3_key` (required), `status` (Active | Expired | Archived | Pending Review).",
+      "item": [
+        {
+          "name": "List documents",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/documents",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "documents"
+              ],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "100",
+                  "disabled": true
+                },
+                {
+                  "key": "offset",
+                  "value": "0",
+                  "disabled": true
+                },
+                {
+                  "key": "status",
+                  "value": "Active",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "Returns an array of rows. Optional `limit` (max 500), `offset`, and exact-match filters on any column (enable them in the Params tab)."
+          }
+        },
+        {
+          "name": "Create document",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('201 Created', () => pm.response.to.have.status(201));",
+                  "if (pm.response.code === 201) pm.collectionVariables.set('document_id', pm.response.json().document_id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"equipment_id\": \"{{equipment_id}}\",\n  \"doc_type\": \"Inspection Certificate\",\n  \"expiry_date\": \"2027-06-30\",\n  \"s3_key\": \"documents/compressor-a/inspection-2026.pdf\",\n  \"status\": \"Active\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/documents",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "documents"
+              ]
+            },
+            "description": "Creates a row and returns it (201). `document_id` is generated as a UUID unless you send one. The test script saves it into the `document_id` collection variable."
+          }
+        },
+        {
+          "name": "Get documents by id",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/documents/{{document_id}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "documents",
+                "{{document_id}}"
+              ]
+            },
+            "description": "Returns one row, or 404."
+          }
+        },
+        {
+          "name": "Update documents by id",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"Pending Review\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/documents/{{document_id}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "documents",
+                "{{document_id}}"
+              ]
+            },
+            "description": "Partial update: only the fields you send are changed. PUT behaves the same. Returns the updated row."
+          }
+        },
+        {
+          "name": "Delete documents by id",
+          "request": {
+            "method": "DELETE",
+            "url": {
+              "raw": "{{baseUrl}}/documents/{{document_id}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "documents",
+                "{{document_id}}"
+              ]
+            },
+            "description": "Returns 204 on success, 404 if not found. Deleting a row that other rows reference (e.g. equipment with tasks) returns 409."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Alerts",
+      "description": "`/alerts` - primary key `alert_id`.\n\nFields: `task_id` / `document_id` (FKs, nullable), `alert_type` (required), `priority_score` (int), `state` (Open | Sent | Acknowledged | Resolved | Failed), `sent_at` (YYYY-MM-DD HH:MM:SS or null).",
+      "item": [
+        {
+          "name": "List alerts",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/alerts",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "alerts"
+              ],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "100",
+                  "disabled": true
+                },
+                {
+                  "key": "offset",
+                  "value": "0",
+                  "disabled": true
+                },
+                {
+                  "key": "state",
+                  "value": "Open",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "Returns an array of rows. Optional `limit` (max 500), `offset`, and exact-match filters on any column (enable them in the Params tab)."
+          }
+        },
+        {
+          "name": "Create alert",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('201 Created', () => pm.response.to.have.status(201));",
+                  "if (pm.response.code === 201) pm.collectionVariables.set('alert_id', pm.response.json().alert_id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"task_id\": \"{{task_id}}\",\n  \"document_id\": null,\n  \"alert_type\": \"Task Overdue\",\n  \"priority_score\": 85,\n  \"state\": \"Open\",\n  \"sent_at\": null\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/alerts",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "alerts"
+              ]
+            },
+            "description": "Creates a row and returns it (201). `alert_id` is generated as a UUID unless you send one. The test script saves it into the `alert_id` collection variable."
+          }
+        },
+        {
+          "name": "Get alerts by id",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/alerts/{{alert_id}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "alerts",
+                "{{alert_id}}"
+              ]
+            },
+            "description": "Returns one row, or 404."
+          }
+        },
+        {
+          "name": "Update alerts by id",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"state\": \"Acknowledged\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/alerts/{{alert_id}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "alerts",
+                "{{alert_id}}"
+              ]
+            },
+            "description": "Partial update: only the fields you send are changed. PUT behaves the same. Returns the updated row."
+          }
+        },
+        {
+          "name": "Delete alerts by id",
+          "request": {
+            "method": "DELETE",
+            "url": {
+              "raw": "{{baseUrl}}/alerts/{{alert_id}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "alerts",
+                "{{alert_id}}"
+              ]
+            },
+            "description": "Returns 204 on success, 404 if not found. Deleting a row that other rows reference (e.g. equipment with tasks) returns 409."
+          }
+        }
+      ]
+    }
+  ]
+}

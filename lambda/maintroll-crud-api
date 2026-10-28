@@ -1,0 +1,138 @@
+import os
+import json
+import uuid
+import pymysql
+from pymysql.cursors import DictCursor
+
+# URL resource -> (table, primary key, writable columns)
+RESOURCES = {
+    "users": ("musers", "user_id", ["name", "email", "role"]),
+    "equipment": ("equipment", "equipment_id", ["name", "location", "criticality", "status"]),
+    "tasks": ("maintenance_tasks", "task_id",
+              ["equipment_id", "assigned_to", "title", "due_date", "status", "priority"]),
+    "documents": ("documents", "document_id",
+                  ["equipment_id", "doc_type", "expiry_date", "s3_key", "status"]),
+    "alerts": ("alerts", "alert_id",
+               ["task_id", "document_id", "alert_type", "priority_score", "state", "sent_at"]),
+}
+
+CORS_HEADERS = {
+    "Content-Type": "application/json",
+    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Methods": "GET,POST,PUT,PATCH,DELETE,OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type,Authorization,x-api-key",
+}
+
+
+def get_connection():
+    return pymysql.connect(
+        host=os.environ["DB_HOST"],
+        user=os.environ["DB_USER"],
+        password=os.environ["DB_PASSWORD"],
+        database=os.environ["DB_NAME"],
+        connect_timeout=5,
+        cursorclass=DictCursor,
+        autocommit=True,
+    )
+
+
+def response(status, body=None):
+    return {
+        "statusCode": status,
+        "headers": CORS_HEADERS,
+        "body": json.dumps(body, default=str) if body is not None else "",
+    }
+
+
+def parse_request(event):
+    # Works with both REST API (v1) and HTTP API (v2) proxy events
+    method = event.get("httpMethod") or event["requestContext"]["http"]["method"]
+    path = event.get("rawPath") or event.get("path") or "/"
+    segments = [s for s in path.split("/") if s]
+    # Skip any stage/prefix segments before the resource name
+    while segments and segments[0] not in RESOURCES:
+        segments.pop(0)
+    resource = segments[0] if segments else None
+    item_id = segments[1] if len(segments) > 1 else None
+    query = event.get("queryStringParameters") or {}
+    body = json.loads(event["body"]) if event.get("body") else {}
+    return method.upper(), resource, item_id, query, body
+
+
+def list_items(cur, table, pk, columns, query):
+    filters = {k: v for k, v in query.items() if k in columns or k == pk}
+    sql = f"SELECT * FROM {table}"
+    if filters:
+        sql += " WHERE " + " AND ".join(f"{k} = %s" for k in filters)
+    limit = min(int(query.get("limit", 100)), 500)
+    offset = int(query.get("offset", 0))
+    sql += f" ORDER BY {pk} LIMIT %s OFFSET %s"
+    cur.execute(sql, [*filters.values(), limit, offset])
+    return response(200, cur.fetchall())
+
+
+def get_item(cur, table, pk, item_id):
+    cur.execute(f"SELECT * FROM {table} WHERE {pk} = %s", [item_id])
+    row = cur.fetchone()
+    return response(200, row) if row else response(404, {"error": "Not found"})
+
+
+def create_item(cur, table, pk, columns, body):
+    data = {k: v for k, v in body.items() if k in columns}
+    data[pk] = body.get(pk) or str(uuid.uuid4())
+    cols = ", ".join(data)
+    placeholders = ", ".join(["%s"] * len(data))
+    cur.execute(f"INSERT INTO {table} ({cols}) VALUES ({placeholders})", list(data.values()))
+    return get_item(cur, table, pk, data[pk]) | {"statusCode": 201}
+
+
+def update_item(cur, table, pk, columns, item_id, body):
+    data = {k: v for k, v in body.items() if k in columns}
+    if not data:
+        return response(400, {"error": f"No updatable fields. Allowed: {columns}"})
+    assignments = ", ".join(f"{k} = %s" for k in data)
+    cur.execute(f"UPDATE {table} SET {assignments} WHERE {pk} = %s", [*data.values(), item_id])
+    return get_item(cur, table, pk, item_id)
+
+
+def delete_item(cur, table, pk, item_id):
+    cur.execute(f"DELETE FROM {table} WHERE {pk} = %s", [item_id])
+    if cur.rowcount == 0:
+        return response(404, {"error": "Not found"})
+    return response(204)
+
+
+def lambda_handler(event, context):
+    try:
+        method, resource, item_id, query, body = parse_request(event)
+    except (ValueError, KeyError):
+        return response(400, {"error": "Invalid request"})
+
+    if method == "OPTIONS":
+        return response(204)
+    if resource not in RESOURCES:
+        return response(404, {"error": f"Unknown resource. Use one of: {list(RESOURCES)}"})
+
+    table, pk, columns = RESOURCES[resource]
+    conn = get_connection()
+    try:
+        with conn.cursor() as cur:
+            if method == "GET" and item_id:
+                return get_item(cur, table, pk, item_id)
+            if method == "GET":
+                return list_items(cur, table, pk, columns, query)
+            if method == "POST" and not item_id:
+                return create_item(cur, table, pk, columns, body)
+            if method in ("PUT", "PATCH") and item_id:
+                return update_item(cur, table, pk, columns, item_id, body)
+            if method == "DELETE" and item_id:
+                return delete_item(cur, table, pk, item_id)
+            return response(405, {"error": "Method not allowed"})
+    except pymysql.err.IntegrityError as e:
+        # Duplicate key, missing required field, or bad foreign key
+        return response(409, {"error": e.args[1]})
+    except (pymysql.err.DataError, pymysql.err.OperationalError, ValueError) as e:
+        # Invalid enum/date value, bad limit/offset, etc.
+        return response(400, {"error": str(e.args[-1]) if e.args else str(e)})
+    finally:
+        conn.close()
