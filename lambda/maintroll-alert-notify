@@ -1,0 +1,51 @@
+import os
+import json
+import urllib.request
+
+import boto3
+
+sns = boto3.client("sns")
+TOPIC = os.environ["TOPIC_ARN"]
+
+
+def send(audience, count, lines):
+    body = "Open maintenance alerts, highest priority first:\n\n" + "\n".join(
+        f"{i}. {line}" for i, line in enumerate(lines, 1)
+    )
+    sns.publish(
+        TopicArn=TOPIC,
+        Subject=f"MainTroll: {count} open maintenance alerts",
+        Message=body,
+        MessageAttributes={
+            "audience": {"DataType": "String", "StringValue": audience}
+        },
+    )
+
+
+def lambda_handler(event, context):
+    with urllib.request.urlopen(os.environ["DASHBOARD_URL"], timeout=10) as r:
+        data = json.loads(r.read().decode())
+
+    alerts = [a for a in data.get("alerts", []) if a.get("state") == "Open"]
+    if not alerts:
+        print("No open alerts")
+        return {"sent": False, "count": 0}
+    alerts.sort(key=lambda a: a["priority_score"], reverse=True)
+
+    # who owns each task: "title (equipment)" -> person name
+    owner = {f"{t['title']} ({t['equipment']})": t["assigned_to"] for t in data.get("tasks", [])}
+
+    lines = [f"[{a['priority_score']}] {a['alert_type']}: {a['item']}" for a in alerts]
+    send("manager", len(alerts), lines)
+
+    per_person = {}
+    for a, line in zip(alerts, lines):
+        who = owner.get(a["item"])
+        if who and who != "Not assigned":
+            per_person.setdefault(who, []).append(line)
+
+    for who, person_lines in per_person.items():
+        send(who, len(person_lines), person_lines)
+
+    print(f"Manager: {len(alerts)} alerts. People: { {k: len(v) for k, v in per_person.items()} }")
+    return {"sent": True, "manager_count": len(alerts), "people": list(per_person)}
