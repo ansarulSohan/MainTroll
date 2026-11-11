@@ -111,17 +111,27 @@ const pill = v => `<span class="${pillClass(v)}">${esc(v)}</span>`;
 /* ---------- Data layer ---------- */
 let data = {equipment:[],tasks:[],documents:[],alerts:[],users:[]};
 
-/* One place for all HTTP calls. Throws Error with a readable message. */
-async function request(method,url,body){
+/* One place for all HTTP calls. Sends the Cognito access token (see auth.js).
+   Throws Error with a readable message. */
+async function request(method,url,body,retried=false){
+  const headers = {};
+  if(body!==undefined) headers["Content-Type"]="application/json";
+  const token = await Auth.getToken();
+  if(token) headers.Authorization = "Bearer "+token;
   let res;
   try {
     res = await fetch(url,{
       method,
-      headers: body!==undefined ? {"Content-Type":"application/json"} : undefined,
+      headers,
       body: body!==undefined ? JSON.stringify(body) : undefined
     });
   } catch(err){
     throw new Error("Could not reach the API. Check the URL, your connection and the CORS settings in API Gateway.");
+  }
+  if(res.status===401 && Auth.enabled && !retried){
+    console.warn(`[auth] ${method} ${url} returned 401, refreshing the token and retrying once`);
+    await Auth.recover();
+    return request(method,url,body,true);
   }
   const text = await res.text();
   let payload = null;
@@ -321,7 +331,7 @@ function dashboardView(){
   const alertRows = topAlerts.length ? topAlerts.map(a=>`<div class="list-row"><div><strong>${esc(a.type)}</strong><span class="sub">${esc(a.item)}</span></div><div class="right">${pill(severity(a.priority))}${pill(a.state)}</div></div>`).join("") : `<p class="empty-state">No unresolved alerts.</p>`;
 
   return `
-  <section class="greeting hero" aria-label="Welcome"><div class="hero-inner"><p class="eyebrow hero-eyebrow">OFFSHORE OPERATIONS</p><p class="greeting-title">${greet}, User</p><p class="greeting-sub">${esc(dateLabel)} · Here is the current state of your offshore assets.</p></div></section>
+  <section class="greeting hero" aria-label="Welcome"><div class="hero-inner"><p class="eyebrow hero-eyebrow">OFFSHORE OPERATIONS</p><p class="greeting-title">${greet}, ${esc(Auth.user?.name||"User")}</p><p class="greeting-sub">${esc(dateLabel)} · Here is the current state of your offshore assets.</p></div></section>
 
   <section class="kpi-grid" aria-label="Summary">
     ${kpi({label:"Total equipment",value:total,note:"Registered assets",ico:"equipment",href:"#equipment"})}
@@ -464,6 +474,7 @@ function settingsView(){
   <div class="view-head"><div><p>Data source and connection details.</p></div></div>
   ${panel("Data source","","",`<dl class="kv">
     <dt>Mode</dt><dd>${store.demo?"Demo (browser storage)":"Live API (AWS)"}</dd>
+    <dt>Signed in as</dt><dd>${Auth.user?`${esc(Auth.user.name)}${Auth.user.email?` (${esc(Auth.user.email)})`:""} · ${esc(Auth.user.groups.join(", ")||"no role group")}`:"Sign-in is off. Set <code>AUTH_CONFIG</code> in auth.js"}</dd>
     <dt>Dashboard endpoint</dt><dd>${API.dashboard?esc(API.dashboard):"Not configured — set <code>API.dashboard</code> in script.js"}</dd>
     <dt>CRUD endpoint</dt><dd>${API.crud?esc(API.crud):"Not configured — set <code>API.crud</code> in script.js"}</dd>
     <dt>Records</dt><dd>${data.equipment.length} equipment · ${data.tasks.length} tasks · ${data.documents.length} documents · ${data.alerts.length} alerts · ${data.users.length} users</dd>
@@ -483,6 +494,12 @@ function updateChrome(){
   $("pageTitle").textContent=VIEWS[state.view].title;
   document.title=`${VIEWS[state.view].title} | MainTroll`;
   $("footerMode").textContent=store.demo?"Demo version · Data is stored locally in this browser":"Connected to AWS";
+  if(Auth.user){
+    $("userName").textContent=Auth.user.name;
+    $("userRole").textContent=Auth.user.groups.join(", ")||"No role";
+    $("userAvatar").textContent=Auth.user.name.trim().charAt(0).toUpperCase()||"U";
+    $("logoutButton").hidden=false;
+  }
 
   /* Equipment selects: value = record ID, label = name */
   ["taskEquipment","documentEquipment"].forEach(id=>{
@@ -661,6 +678,7 @@ searchInput.addEventListener("keydown",e=>{ if(e.key==="Escape"){ if(state.query
 $("searchResults").addEventListener("click",()=>{ $("searchResults").hidden=true; });
 $("menuToggle").addEventListener("click",()=>$("sidebar").classList.contains("open")?closeNav():openNav());
 $("scrim").addEventListener("click",closeNav);
+$("logoutButton").addEventListener("click",()=>Auth.logout());
 document.addEventListener("keydown",e=>{ if(e.key==="Escape") closeNav(); });
 window.addEventListener("hashchange",applyRoute);
 
@@ -672,4 +690,10 @@ async function refresh(){
   catch(err){ state.status="error"; state.error=err.message||"Unknown error"; }
   render();
 }
-(async function init(){ state.status="loading"; applyRoute(); await refresh(); })();
+(async function init(){
+  state.status="loading"; applyRoute();
+  try { await Auth.init(); }
+  catch(err){ state.status="error"; state.error=err.message; render(); return; }
+  applyRoute(); /* the login redirect may have restored a #view */
+  await refresh();
+})();

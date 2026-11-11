@@ -354,7 +354,7 @@ td.empty-state { padding: 28px 16px; }
 .detail-section li:last-child { border-bottom: 0; }
 .detail-section .none { color: var(--muted); padding: 10px 12px; font-size: 13px; border: 1px solid var(--line-soft); border-radius: 8px; }
 
-.toast { position: fixed; bottom: 22px; right: 22px; max-width: min(400px, calc(100vw - 32px)); background: var(--navy); color: #fff; padding: 12px 16px; border-radius: 10px; box-shadow: 0 10px 35px rgba(16,46,89,.3); opacity: 0; transform: translateY(12px); pointer-events: none; transition: .25s; z-index: 60; font-size: 13px; }
+.toast { position: fixed; bottom: 118px; right: 22px; max-width: min(400px, calc(100vw - 32px)); background: var(--navy); color: #fff; padding: 12px 16px; border-radius: 10px; box-shadow: 0 10px 35px rgba(16,46,89,.3); opacity: 0; transform: translateY(12px); pointer-events: none; transition: .25s; z-index: 60; font-size: 13px; }
 .toast.show { opacity: 1; transform: translateY(0); }
 
 /* ---------- Responsive ---------- */
@@ -392,3 +392,471 @@ td.empty-state { padding: 28px 16px; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; transition: none !important; animation: none !important; }
 }
+
+
+
+/* ========================================
+   MAINTROLL AI ASSISTANT
+======================================== */
+
+#maintroll-chat {
+  position: fixed;
+  right: 30px;
+  bottom: 20px;
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 15px;
+  font-family: inherit;
+}
+
+/* Floating launcher */
+
+#maintroll-chat #chat-toggle {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 48px;
+  padding: 6px 9px;
+  border: 1px solid rgba(255, 255, 255, .2);
+  border-radius: 20px;
+  color: #fff;
+  background: linear-gradient(135deg, #102d50, #126b79);
+  box-shadow: 0 10px 35px rgba(16, 45, 80, .32);
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+  transition: transform .25s ease, box-shadow .25s ease;
+  animation: maintroll-ai-glow 3s ease-in-out infinite;
+}
+
+#maintroll-chat #chat-toggle:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 15px 40px rgba(16, 45, 80, .42);
+}
+
+#maintroll-chat #chat-toggle:focus-visible {
+  outline: 3px solid #43d6c2;
+  outline-offset: 4px;
+}
+
+#maintroll-chat .ai-launcher-icon {
+  width: 32px;
+  height: 38px;
+  flex: 0 0 47px;
+  display: grid;
+  place-items: center;
+  background: rgba(255, 255, 255, .14);
+  border: 1px solid rgba(255, 255, 255, .18);
+  border-radius: 15px;
+  font-size: 25px;
+  line-height: 1;
+}
+
+#maintroll-chat .ai-launcher-text {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+#maintroll-chat .ai-launcher-text strong {
+  font-size: 15px;
+  font-weight: 750;
+  letter-spacing: -.2px;
+}
+
+#maintroll-chat .ai-launcher-text small {
+  font-size: 11px;
+  color: #c8e8e8;
+}
+
+#maintroll-chat .ai-launcher-arrow {
+  margin-left: 8px;
+  font-size: 21px;
+  color: #8ce8d8;
+}
+
+@keyframes maintroll-ai-glow {
+  0%, 100% {
+    box-shadow: 0 10px 35px rgba(16, 45, 80, .28);
+  }
+
+  50% {
+    box-shadow: 0 10px 38px rgba(24, 155, 157, .35);
+  }
+}
+
+/* Chat window */
+
+#maintroll-chat #chat-window {
+  width: min(500px, calc(100vw - 32px));
+  height: min(650px, calc(100dvh - 125px));
+  min-height: 420px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: #fff;
+  border: 1px solid #dce7ed;
+  border-radius: 23px;
+  box-shadow: 0 20px 65px rgba(13, 35, 58, .25);
+  animation: maintroll-chat-enter .25s ease;
+}
+
+#maintroll-chat #chat-window[hidden] {
+  display: none;
+}
+
+@keyframes maintroll-chat-enter {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(.98);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* Header */
+
+#maintroll-chat .chat-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  padding: 18px 20px;
+  color: #fff;
+  background: linear-gradient(120deg, #102d50, #125d70);
+}
+
+#maintroll-chat .chat-brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+#maintroll-chat .chat-brand-icon {
+  width: 43px;
+  height: 43px;
+  display: grid;
+  place-items: center;
+  border-radius: 13px;
+  background: rgba(255, 255, 255, .16);
+  border: 1px solid rgba(255, 255, 255, .2);
+  font-size: 25px;
+  line-height: 1;
+}
+
+#maintroll-chat .chat-brand-details {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+#maintroll-chat .chat-brand-details strong {
+  font-size: 16px;
+  letter-spacing: -.3px;
+}
+
+#maintroll-chat .chat-online {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: #c9e9e5;
+}
+
+#maintroll-chat .chat-online i {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #56e3b1;
+  box-shadow: 0 0 8px #56e3b1;
+}
+
+#maintroll-chat .chat-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+#maintroll-chat .chat-header-label {
+  font-size: 9px;
+  letter-spacing: 1.1px;
+  color: #b8d8e0;
+  text-align: right;
+}
+
+#maintroll-chat #chat-close {
+  width: 30px;
+  height: 30px;
+  border: 0;
+  border-radius: 8px;
+  color: #fff;
+  background: rgba(255, 255, 255, .13);
+  font-size: 23px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+#maintroll-chat #chat-close:hover {
+  background: rgba(255, 255, 255, .25);
+}
+
+/* Welcome section */
+
+#maintroll-chat .chat-welcome {
+  padding: 22px 22px 16px;
+  background: linear-gradient(180deg, #f0f7f9, #fff);
+}
+
+#maintroll-chat .welcome-tag {
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 1.3px;
+  color: #13858b;
+}
+
+#maintroll-chat .chat-welcome h2 {
+  margin: 9px 0 8px;
+  color: #142f4c;
+  font-size: 25px;
+  line-height: 1.2;
+  letter-spacing: -.8px;
+}
+
+#maintroll-chat .chat-welcome p {
+  margin: 0;
+  max-width: 340px;
+  color: #687b8d;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+/* Suggested questions */
+
+#maintroll-chat .chat-suggestions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin-top: 15px;
+}
+
+#maintroll-chat .chat-suggestions > span {
+  width: 100%;
+  margin-bottom: 2px;
+  color: #718397;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+#maintroll-chat .chat-suggestions div {
+  padding: 8px 10px;
+  border: 1px solid #dbe8ed;
+  border-radius: 20px;
+  background: #fff;
+  color: #31546a;
+  font-size: 10px;
+}
+
+/* Messages */
+
+#maintroll-chat #chat-messages {
+  flex: 1;
+  min-height: 75px;
+  padding: 16px 20px;
+  overflow-y: auto;
+  background: #fff;
+  scroll-behavior: smooth;
+}
+
+#maintroll-chat .assistant-message,
+#maintroll-chat .user-message {
+  width: fit-content;
+  max-width: 88%;
+  padding: 12px 15px;
+  margin-bottom: 12px;
+  border-radius: 15px;
+  font-size: 13px;
+  line-height: 1.65;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+#maintroll-chat .assistant-message {
+  color: #30465b;
+  background: #eff4f7;
+  border: 1px solid #e6edf1;
+  border-bottom-left-radius: 5px;
+  text-align: justify ;
+}
+
+#maintroll-chat .assistant-message.thinking {
+  color: #718397;
+  font-style: italic;
+  opacity: .8;
+}
+
+#maintroll-chat .assistant-message.chat-error {
+  color: #a52c2c;
+  background: #fff0ef;
+  border-color: #f8d7d4;
+}
+
+#maintroll-chat .user-message {
+  margin-left: auto;
+  color: #fff;
+  background: linear-gradient(135deg, #174c72, #147c83);
+  border-bottom-right-radius: 5px;
+}
+
+/* Input area */
+
+#maintroll-chat #chat-form {
+  padding: 15px 17px 12px;
+  background: #fff;
+  border-top: 1px solid #edf1f4;
+}
+
+#maintroll-chat .chat-input-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px;
+  border: 1px solid #dce6eb;
+  border-radius: 15px;
+  background: #f8fafb;
+  transition: border-color .2s, box-shadow .2s;
+}
+
+#maintroll-chat .chat-input-wrap:focus-within {
+  border-color: #269b9c;
+  box-shadow: 0 0 0 3px rgba(38, 155, 156, .1);
+}
+
+#maintroll-chat #chat-input {
+  flex: 1;
+  min-width: 0;
+  padding: 11px 10px;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: #20394f;
+  font: inherit;
+  font-size: 13px;
+}
+
+#maintroll-chat #chat-input::placeholder {
+  color: #91a0ad;
+}
+
+#maintroll-chat #chat-form button[type="submit"] {
+  width: 43px;
+  height: 43px;
+  flex: 0 0 43px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 12px;
+  color: #fff;
+  background: #126d7a;
+  font-size: 23px;
+  cursor: pointer;
+  transition: background .2s, transform .2s;
+}
+
+#maintroll-chat #chat-form button[type="submit"]:hover {
+  background: #0e5268;
+  transform: translateY(-1px);
+}
+
+#maintroll-chat #chat-form button:disabled {
+  opacity: .45;
+  cursor: not-allowed;
+}
+
+#maintroll-chat .chat-disclaimer {
+  display: block;
+  padding-top: 9px;
+  color: #98a5b0;
+  font-size: 9px;
+  text-align: center;
+}
+
+/* Mobile */
+
+@media (max-width: 600px) {
+  #maintroll-chat {
+    right: 14px;
+    bottom: 14px;
+    gap: 10px;
+  }
+
+  #maintroll-chat #chat-toggle {
+    min-height: 62px;
+    padding: 8px 13px 8px 9px;
+    border-radius: 17px;
+  }
+
+  #maintroll-chat .ai-launcher-icon {
+    width: 42px;
+    height: 42px;
+    flex-basis: 42px;
+  }
+
+  #maintroll-chat #chat-window {
+    width: calc(100vw - 28px);
+    height: min(650px, calc(100dvh - 100px));
+    min-height: 350px;
+    border-radius: 19px;
+  }
+
+  #maintroll-chat .chat-header-label {
+    display: none;
+  }
+
+  #maintroll-chat .chat-welcome {
+    padding: 17px;
+  }
+
+  #maintroll-chat .chat-welcome h2 {
+    font-size: 22px;
+  }
+
+  #maintroll-chat #chat-messages {
+    padding: 13px;
+  }
+}
+
+/* Respect reduced-motion preferences */
+
+@media (prefers-reduced-motion: reduce) {
+  #maintroll-chat #chat-toggle,
+  #maintroll-chat #chat-window {
+    animation: none;
+    transition: none;
+  }
+}
+
+/* clickable suggestions */
+#maintroll-chat .chat-suggestions button {
+  padding: 8px 12px;
+  border: 1px solid #dbe8ed;
+  border-radius: 20px;
+  background: #fff;
+  color: #31546a;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+#maintroll-chat .chat-suggestions button:hover {
+  background: #f0f7f9;
+  border-color: #269b9c;
+}
+
+/* readable small text */
+#maintroll-chat .chat-disclaimer { color: var(--muted); font-size: 11px; }
+#maintroll-chat .welcome-tag { font-size: 11px; }
+#maintroll-chat .chat-suggestions > span { font-size: 11px; color: var(--muted); }
